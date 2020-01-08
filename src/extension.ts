@@ -8,7 +8,7 @@ export const activate = (context: ExtensionContext) => {
   // Now provide the implementation of the command with  registerCommand
   // The commandId parameter must match the command field in package.json
   const disposable = commands.registerCommand(
-    'unitTestGenerator.generateUnitTest',
+    'unit-test-generator.generateUnitTest',
     generateUnitTestCommand
   );
 

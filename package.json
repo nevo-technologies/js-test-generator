@@ -11,16 +11,24 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:unitTestGenerator.generateUnitTest"
+    "onCommand:unit-test-generator.generateUnitTest"
   ],
   "main": "./out/extension",
   "contributes": {
     "commands": [
       {
-        "command": "unitTestGenerator.generateUnitTest",
+        "command": "unit-test-generator.generateUnitTest",
         "title": "Generate Unit Test"
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "unit-test-generator.generateUnitTest",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
