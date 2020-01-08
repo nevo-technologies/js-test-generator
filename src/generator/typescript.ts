@@ -1,5 +1,3 @@
-import { LanguageEngine } from './common';
+import JavascriptEngine from './javascript';
 
-export default class TypescriptEngine implements LanguageEngine {
-  create = () => Promise.resolve();
-}
+export default class TypescriptEngine extends JavascriptEngine {}
