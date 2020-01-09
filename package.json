@@ -1,6 +1,6 @@
 {
-  "name": "unit-test-generator",
-  "displayName": "unit-test-generator",
+  "name": "js-test-generator",
+  "displayName": "js-test-generator",
   "description": "",
   "version": "0.0.1",
   "publisher": "foo",
@@ -11,20 +11,20 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:unit-test-generator.generateUnitTest"
+    "onCommand:js-test-generator.generateUnitTest"
   ],
   "main": "./out/extension",
   "contributes": {
     "commands": [
       {
-        "command": "unit-test-generator.generateUnitTest",
+        "command": "js-test-generator.generateUnitTest",
         "title": "Generate Unit Test"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "unit-test-generator.generateUnitTest",
+          "command": "js-test-generator.generateUnitTest",
           "when": "editorLangId == javascript || editorLangId == typescript"
         }
       ]
