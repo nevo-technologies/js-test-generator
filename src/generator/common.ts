@@ -6,70 +6,61 @@ import {
   SyntaxKind,
   Node,
   ExportAssignment,
-  ExportSpecifier,
   VariableStatement,
-  VariableDeclaration,
 } from 'typescript';
 import { commands, Uri, window } from 'vscode';
 
-interface Dependencies {
+interface Exports {
   namedExports: Array<string>;
   hasDefaultExport: boolean;
 }
 
-const extractNode = (node: Node): Dependencies | undefined => {
-  // TODO: pass dependencies down
-  const dependencies: Dependencies = {
+const extractNode = (node: Node, sourceFileExports: Exports) => {
+  // TODO: export class statements
+  // TODO: export variable statements
+  switch (node.kind) {
+    case SyntaxKind.VariableStatement:
+      // This covers the case of variables exported in the same statement as they are declared
+      const variableStatement = node as VariableStatement;
+      if (
+        variableStatement.modifiers &&
+        variableStatement.modifiers.some(modifier => modifier.kind === SyntaxKind.ExportKeyword)
+      ) {
+        variableStatement.declarationList.declarations.forEach(variableDeclaration => {
+          if (variableDeclaration.name.kind === SyntaxKind.Identifier) {
+            sourceFileExports.namedExports.push(variableDeclaration.name.text);
+          }
+        });
+      }
+      break;
+    case SyntaxKind.ExportAssignment:
+      // This is an export default... clause as long as isExportEquals is falsy
+      sourceFileExports.hasDefaultExport = !(node as ExportAssignment).isExportEquals;
+      break;
+    default:
+      // By default, continue traversing the node tree
+      forEachChild(node, node => extractNode(node, sourceFileExports));
+      break;
+  }
+};
+
+const convertDependenciesToImports = (dependencies: Exports, moduleName: string, fileName: string) => {
+  // TODO: resolve name clashes between default (moduleName) and named exports
+  let importClause = '';
+  if (dependencies.hasDefaultExport) {
+    importClause += `${moduleName}`;
+  }
+  if (dependencies.namedExports.length > 0) {
+    importClause += `${dependencies.hasDefaultExport ? ', ' : ''}{ ${dependencies.namedExports.join(', ')} }`;
+  }
+  return `import ${importClause} from '../${fileName}';`;
+};
+
+const extractSourceCode = (sourceCodeFilePath: string): Promise<Exports> => {
+  const dependencies: Exports = {
     namedExports: [],
     hasDefaultExport: false,
   };
-  switch (node.kind) {
-    case SyntaxKind.VariableStatement:
-      // This covers the case of exported variables (named export) from the file
-      if ((node as VariableStatement).modifiers.some(modifier => modifier.kind === SyntaxKind.ExportKeyword)) {
-        const exportedMembers = forEachChild(node, extractNode);
-        if (exportedMembers && exportedMembers.namedExports) {
-          exportedMembers.namedExports.forEach(namedExport => {
-            dependencies.namedExports.push(namedExport);
-          });
-        }
-      }
-      return dependencies;
-    case SyntaxKind.VariableDeclaration:
-      const variableDeclaration = node as VariableDeclaration;
-      if (variableDeclaration.name.kind === SyntaxKind.Identifier) {
-        dependencies.namedExports.push(variableDeclaration.name.text);
-      }
-      return dependencies;
-    case SyntaxKind.ExportAssignment:
-      // This is an export default... clause as long as isExportEquals is falsy
-      dependencies.hasDefaultExport = !(node as ExportAssignment).isExportEquals;
-      return dependencies;
-    case SyntaxKind.ExportSpecifier:
-      // This is a named export clause
-      const namedExportExpression = node as ExportSpecifier;
-      dependencies.namedExports.push(namedExportExpression.name.text);
-      return dependencies;
-    default:
-      // If we arrive at a node that we do not care to process continue iterating over the node's children
-      return forEachChild(node, extractNode);
-  }
-};
-
-const convertDependenciesToImports = (dependencies: Dependencies, moduleName: string) => {
-  let importClause = '';
-  if (dependencies.namedExports.length > 0) {
-    importClause = `import { ${dependencies.namedExports.join(', ')} }`;
-    if (dependencies.hasDefaultExport) {
-      importClause += `, ${moduleName}`;
-    }
-  } else if (dependencies.hasDefaultExport) {
-    importClause = `import ${moduleName}`;
-  }
-  return `${importClause} from `;
-};
-
-const extractSourceCode = (sourceCodeFilePath: string): Promise<Dependencies> => {
   return new Promise<string>((resolve, reject) => {
     readFile(sourceCodeFilePath, (error, data) => {
       if (error) {
@@ -80,7 +71,10 @@ const extractSourceCode = (sourceCodeFilePath: string): Promise<Dependencies> =>
     });
   })
     .then(fileContents => createSourceFile(sourceCodeFilePath, fileContents, ScriptTarget.ES2015, true))
-    .then(extractNode);
+    .then(sourceFile => {
+      extractNode(sourceFile, dependencies);
+      return dependencies;
+    });
 };
 
 export const generateUnitTestSuite = (sourceCodeFilePath: string) => {
@@ -114,7 +108,7 @@ export const generateUnitTestSuite = (sourceCodeFilePath: string) => {
     });
   })
     .then(() => extractSourceCode(sourceCodeFilePath))
-    .then(dependencies => convertDependenciesToImports(dependencies, testSuiteName))
+    .then(dependencies => convertDependenciesToImports(dependencies, testSuiteName, testSuiteName))
     .then(
       fileContents =>
         new Promise((resolve, reject) => {
