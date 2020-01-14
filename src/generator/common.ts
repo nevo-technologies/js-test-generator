@@ -7,6 +7,7 @@ import {
   Node,
   ExportAssignment,
   VariableStatement,
+  NamedDeclaration,
 } from 'typescript';
 import { commands, Uri, window } from 'vscode';
 
@@ -16,11 +17,21 @@ interface Exports {
 }
 
 const extractNode = (node: Node, sourceFileExports: Exports) => {
-  // TODO: export class statements
-  // TODO: export variable statements
   switch (node.kind) {
+    case SyntaxKind.ClassDeclaration:
+    case SyntaxKind.FunctionDeclaration:
+      // Classes and functions as named exports
+      const namedDeclaration = node as NamedDeclaration;
+      if (
+        namedDeclaration.modifiers &&
+        namedDeclaration.modifiers.some(modifier => modifier.kind === SyntaxKind.ExportKeyword) &&
+        namedDeclaration.name.kind === SyntaxKind.Identifier
+      ) {
+        sourceFileExports.namedExports.push(namedDeclaration.name.text);
+      }
+      break;
     case SyntaxKind.VariableStatement:
-      // This covers the case of variables exported in the same statement as they are declared
+      // Variables as named exports
       const variableStatement = node as VariableStatement;
       if (
         variableStatement.modifiers &&
