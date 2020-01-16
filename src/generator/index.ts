@@ -1,5 +1,12 @@
 import { window } from 'vscode';
-import { ensureDirectoryExists, getTestFileInformation, openFileInVsCode, writeContentToFile } from './fileUtils';
+import { bypassErrorCodes, GeneratorError } from './errors';
+import {
+  ensureDirectoryExists,
+  getTestFileInformation,
+  openFileInVsCode,
+  writeContentToFile,
+  warnIfFileExists,
+} from './fileUtils';
 import { createFileContent, extractSourceCode } from './syntax';
 
 export const generateUnitTestCommand = () => {
@@ -22,11 +29,14 @@ export const generateUnitTestCommand = () => {
   const testFileAbsolutePath = `${directoryPath}${name}.${suffix}${extension}`;
 
   return ensureDirectoryExists(directoryPath)
+    .then(() => warnIfFileExists(testFileAbsolutePath))
     .then(() => extractSourceCode(activeFileName))
     .then(dependencies => createFileContent(dependencies, name, name))
     .then(fileContent => writeContentToFile(fileContent, testFileAbsolutePath))
     .then(() => openFileInVsCode(testFileAbsolutePath))
-    .catch((error: Error) => {
-      window.showErrorMessage(error.message);
+    .catch((error: GeneratorError) => {
+      if (!bypassErrorCodes.includes(error.code)) {
+        window.showErrorMessage(error.message);
+      }
     });
 };

@@ -17,6 +17,13 @@ export interface ModuleDependencies {
 }
 
 export const createFileContent = (dependencies: ModuleDependencies, moduleName: string, fileName: string) => {
+  const imports = getImports(dependencies, moduleName, fileName);
+  const mocks = ''; // TODO: mocks
+  const testCases = getTestCases(moduleName);
+  return [imports, mocks, testCases].join('\n');
+};
+
+const getImports = (dependencies: ModuleDependencies, moduleName: string, fileName: string) => {
   // TODO: resolve name clashes between default (moduleName) and named exports
   let importClause = '';
   if (dependencies.hasDefaultExport) {
@@ -26,6 +33,10 @@ export const createFileContent = (dependencies: ModuleDependencies, moduleName: 
     importClause += `${dependencies.hasDefaultExport ? ', ' : ''}{ ${dependencies.namedExports.join(', ')} }`;
   }
   return `import ${importClause} from '../${fileName}';`;
+};
+
+const getTestCases = (moduleName: string) => {
+  return `describe('${moduleName}', () => {});`;
 };
 
 export const extractSourceCode = (sourceCodeFilePath: string): Promise<ModuleDependencies> =>

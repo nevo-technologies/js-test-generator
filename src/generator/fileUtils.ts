@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'fs';
+import { mkdir, readFile, writeFile, open } from 'fs';
 import { Uri, window } from 'vscode';
+import { ErrorCode } from './errors';
 
 export const ensureDirectoryExists = (path: string): Promise<void> => {
   return new Promise((resolve, reject) => {
@@ -9,9 +10,46 @@ export const ensureDirectoryExists = (path: string): Promise<void> => {
           // directory already exists, proceed
           resolve();
         } else {
-          reject(new Error(error.message));
+          reject({ code: ErrorCode.UnableToCreateTestDirectory, message: error.message });
         }
       } else {
+        resolve();
+      }
+    });
+  });
+};
+
+export const warnIfFileExists = (path: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const exclusiveWriteFlag = 'wx';
+    open(path, exclusiveWriteFlag, error => {
+      if (error) {
+        if (error.code === 'EEXIST') {
+          const yesAnswer = 'Yes';
+          const noAnswer = 'No';
+          // file already exists, warn user
+          window
+            .showWarningMessage(
+              'A unit test suite already exists for this file. Do you wish to overwrite it?',
+              yesAnswer,
+              noAnswer
+            )
+            .then(answer => {
+              if (answer === yesAnswer) {
+                // User has chosen to overwrite. Continue.
+                resolve();
+              } else {
+                // User has chosen not to overwrite. Open file for editing
+                openFileInVsCode(path);
+                reject({ code: ErrorCode.UnitTestFileExists, message: '' });
+              }
+            });
+        } else {
+          // Unexpected error. Abort further operations
+          reject({ code: ErrorCode.Unknown, message: error.message });
+        }
+      } else {
+        // File does not exist. Continue.
         resolve();
       }
     });
@@ -22,7 +60,7 @@ export const writeContentToFile = (content: string, path: string): Promise<void>
   return new Promise((resolve, reject) => {
     writeFile(path, content, error => {
       if (error) {
-        reject(new Error(error.message));
+        reject({ code: ErrorCode.Unknown, message: error.message });
       } else {
         resolve();
       }
@@ -34,7 +72,7 @@ export const readContentFromFile = (path: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     readFile(path, (error, data) => {
       if (error) {
-        reject(new Error(error.message));
+        reject({ code: ErrorCode.Unknown, message: error.message });
       } else {
         resolve(data.toString());
       }
