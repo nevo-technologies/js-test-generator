@@ -1,5 +1,6 @@
 import { window } from 'vscode';
-import { generateUnitTestSuite } from './common';
+import { ensureDirectoryExists, getTestFileInformation, openFileInVsCode, writeContentToFile } from './fileUtils';
+import { createFileContent, extractSourceCode } from './syntax';
 
 export const generateUnitTestCommand = () => {
   // Configuration values for this extension are defined
@@ -16,12 +17,16 @@ export const generateUnitTestCommand = () => {
     return;
   }
 
-  switch (activeFileType) {
-    case 'javascript':
-      return generateUnitTestSuite(activeFileName);
-    case 'typescript':
-      return generateUnitTestSuite(activeFileName);
-    default:
-      return window.showErrorMessage(`${activeFileType} files are not supported at the moment. Sorry!`);
-  }
+  const { name, suffix, extension, directoryPath } = getTestFileInformation(activeFileName);
+  // Finally, construct the path at which we will create the unit test file
+  const testFileAbsolutePath = `${directoryPath}${name}.${suffix}${extension}`;
+
+  return ensureDirectoryExists(directoryPath)
+    .then(() => extractSourceCode(activeFileName))
+    .then(dependencies => createFileContent(dependencies, name, name))
+    .then(fileContent => writeContentToFile(fileContent, testFileAbsolutePath))
+    .then(() => openFileInVsCode(testFileAbsolutePath))
+    .catch((error: Error) => {
+      window.showErrorMessage(error.message);
+    });
 };
