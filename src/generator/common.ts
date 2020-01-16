@@ -1,4 +1,3 @@
-import { readFile, writeFile, mkdir } from 'fs';
 import {
   createSourceFile,
   forEachChild,
@@ -9,7 +8,8 @@ import {
   VariableStatement,
   NamedDeclaration,
 } from 'typescript';
-import { commands, Uri, window } from 'vscode';
+import { window } from 'vscode';
+import { ensureDirectoryExists, openFileInVsCode, readContentFromFile, writeContentToFile } from './fileUtils';
 
 interface Exports {
   namedExports: Array<string>;
@@ -72,15 +72,7 @@ const extractSourceCode = (sourceCodeFilePath: string): Promise<Exports> => {
     namedExports: [],
     hasDefaultExport: false,
   };
-  return new Promise<string>((resolve, reject) => {
-    readFile(sourceCodeFilePath, (error, data) => {
-      if (error) {
-        reject(new Error(error.message));
-      } else {
-        resolve(data.toString());
-      }
-    });
-  })
+  return readContentFromFile(sourceCodeFilePath)
     .then(fileContents => createSourceFile(sourceCodeFilePath, fileContents, ScriptTarget.ES2015, true))
     .then(sourceFile => {
       extractNode(sourceFile, dependencies);
@@ -88,56 +80,44 @@ const extractSourceCode = (sourceCodeFilePath: string): Promise<Exports> => {
     });
 };
 
-export const generateUnitTestSuite = (sourceCodeFilePath: string) => {
+interface TestFileInformation {
+  name: string;
+  suffix: string;
+  extension: string;
+  directoryPath: string;
+}
+
+const getTestFileInformation = (sourceFilePath: string): TestFileInformation => {
   // Find the last occurrence of "/"" in the path to separate the file name from the parent directory and full path
-  const fileNamePosition = sourceCodeFilePath.lastIndexOf('/') + 1;
-  const extensionPosition = sourceCodeFilePath.indexOf('.', fileNamePosition);
+  const fileNamePosition = sourceFilePath.lastIndexOf('/') + 1;
+  const extensionPosition = sourceFilePath.indexOf('.', fileNamePosition);
   // By default, name the suite to match the file name (minus extension)
-  const testSuiteName = sourceCodeFilePath.slice(fileNamePosition, extensionPosition);
+  const name = sourceFilePath.slice(fileNamePosition, extensionPosition);
 
   const testDirectoryName = '__tests__';
   // A special suffix to differentiate test files
-  const testFileSuffix = 'spec';
-  const testDirectoryAbsolutePath = sourceCodeFilePath.slice(0, fileNamePosition) + testDirectoryName + '/';
-  const extension = sourceCodeFilePath.slice(extensionPosition);
-  // Finally, construct the path at which we will create the unit test file
-  const testFileAbsolutePath = `${testDirectoryAbsolutePath}${testSuiteName}.${testFileSuffix}${extension}`;
+  const suffix = 'spec';
+  const directoryPath = sourceFilePath.slice(0, fileNamePosition) + testDirectoryName + '/';
+  const extension = sourceFilePath.slice(extensionPosition);
 
-  return new Promise((resolve, reject) => {
-    // ensure the directory to contain the test file exists
-    mkdir(testDirectoryAbsolutePath, error => {
-      if (error) {
-        if (error.code === 'EEXIST') {
-          // directory already exists, proceed
-          resolve();
-        } else {
-          reject(new Error(error.message));
-        }
-      } else {
-        resolve();
-      }
-    });
-  })
+  return {
+    name,
+    suffix,
+    extension,
+    directoryPath,
+  };
+};
+
+export const generateUnitTestSuite = (sourceCodeFilePath: string) => {
+  const { name, suffix, extension, directoryPath } = getTestFileInformation(sourceCodeFilePath);
+  // Finally, construct the path at which we will create the unit test file
+  const testFileAbsolutePath = `${directoryPath}${name}.${suffix}${extension}`;
+
+  return ensureDirectoryExists(directoryPath)
     .then(() => extractSourceCode(sourceCodeFilePath))
-    .then(dependencies => convertDependenciesToImports(dependencies, testSuiteName, testSuiteName))
-    .then(
-      fileContents =>
-        new Promise((resolve, reject) => {
-          // Write the generated contents to the unit test file
-          writeFile(testFileAbsolutePath, fileContents, error => {
-            if (error) {
-              reject(new Error(error.message));
-            } else {
-              resolve();
-            }
-          });
-        })
-    )
-    .then(() => {
-      // Finally, open the test file in VS Code
-      const resource = Uri.file(testFileAbsolutePath);
-      return commands.executeCommand('vscode.open', resource);
-    })
+    .then(dependencies => convertDependenciesToImports(dependencies, name, name))
+    .then(fileContent => writeContentToFile(fileContent, testFileAbsolutePath))
+    .then(() => openFileInVsCode(testFileAbsolutePath))
     .catch((error: Error) => {
       window.showErrorMessage(error.message);
     });
